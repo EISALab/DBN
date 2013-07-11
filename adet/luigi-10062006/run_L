@@ -1,0 +1,25 @@
+# see required input for anomaly detection
+adet 23
+
+# run naive detector
+# using:
+# A prefix for data
+# unnormalized data
+# naive predictor specified in file A-naive_predictor.out
+# data file is: JuneSample10.csv
+# 95% PI tvalue=1.96
+# linear time window
+
+adet 23 A 2 0 0 A-naive_predictor.out JuneSample10.csv 1.96 0 3 1 1 1 0 0 0 0
+
+# run neural network detector
+# using:
+# A prefix for data
+# replacement of anomalous data for future predictions
+# normalized data
+# neural network predictor specified in file A-bpnn30-50-1_predictor.out
+# data file is: JuneSample10.csv
+# 95% PI tvalue=1.96
+# linear time window
+
+adet 23 A 1 1 1 A-bpnn30-50-1_predictor.out JuneSample10.csv 1.96 0 3 1 1 30 0 0 0 0

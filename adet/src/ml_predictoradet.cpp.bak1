@@ -1,0 +1,226 @@
+#include "ml_predictoradet.h"
+
+/**********************************************************************************************************
+ *
+ * int ADET ( int argc, char** argv, ostream errMsg )
+ * 10.06.2006	djhill1	created
+ *
+ **********************************************************************************************************/
+ int ADET( int argc, char** argv, ostream& errMsg){
+  errMsg << "\n\nRun Anomaly Detection\n";
+  //errMsg << "[task]"\n; //argv[1]
+  errMsg << "[prefix]: I/O file prefix\n";
+  errMsg << "[mode]: AD(0), ADAM(1), AD-LRORecOnly(2), ADAM-LRO(3)\n";
+  errMsg << "[norm]: unnormalized(0)/normalized(1) data\n";
+  errMsg << "[mType]: model type( naive(0), neural network(1) )\n";
+  errMsg << "[mSpec]: model specification file\n";
+  errMsg << "[datafile]: Name of file containing data. \n";
+  errMsg << "[t_val]: T-test value (80% = 1.645, 95% = 1.96, 99% = 2.576, 99.9% = 3.291)\n";
+  errMsg << "[tilt_time] :  (0) Do NOT use tilted time (1) use tilted time.\n";
+  errMsg << "[nvar]: Number of variables in datafile. \n";
+  errMsg << "[tgtIdx]: Column of target variable (first column = 0).\n";
+  errMsg << "[delay1]: delay before starting time-series of first variable\n";
+  errMsg << "[nlag1]: number of lags to compose the time-series of the first variable from\n";
+  errMsg << "[delay2]: delay before starting time-series of secon variable\n";
+  errMsg << "[nlag2]: number of lags to compose the time-series of the second variable from\n";
+  errMsg << "\n";
+  int argvCtr = 1; // program name, mode
+  //
+  argvCtr++;
+  if ( argc < argvCtr+1  ) return(0);
+  string prefix = argv[argvCtr];
+  cout << "# I/O prefix: " << prefix << endl;
+  //
+  argvCtr++;
+  if ( argc < argvCtr+1  ) return(0);
+  int mode = atoi( argv[argvCtr] );
+  int mitigation;
+  cout << "# mode: " << mode << endl;
+  if( mode == 0 || mode == 2){
+    mitigation=0;
+    cout << "# Mitigation off.\n";
+  }
+  else if(mode == 1 || mode == 3){
+    mitigation=0;
+    cout << "# Mitigation on.\n";
+  }
+  else{
+    errMsg << "Error: Invalid parameter mode -- aborting.\n";
+    return(0);
+  }
+  //
+  argvCtr++;
+  if ( argc < argvCtr+1  ) return(0);
+  int norm = atoi(argv[argvCtr]);
+  cout << "# Using normalized params: " << norm << endl;
+  if( norm!=0 && norm!=1 ){
+    errMsg << "Error: Invalid variable [norm]\n";
+    return(0);
+  }
+  //
+  argvCtr++;
+  if ( argc < argvCtr+1  ) return(0);
+  int mType = atoi(argv[argvCtr]);
+  if( 0 <= mType && mType <= 1 )  cout << "# Model type: " << mType << endl;
+  else{
+    errMsg << "Error: Invalid model type... aborting\n";
+    return( 0 );
+  }
+  //
+  argvCtr++;
+  if ( argc < argvCtr+1  ) return(0);
+  string mSpec = argv[argvCtr];
+  cout << "# Using model specified in \"" << mSpec << "\""<< endl;
+  //
+  argvCtr++;
+  if ( argc < argvCtr+1  ) return(0);
+  cout << "# Inputfile is: " << argv[argvCtr] << endl;
+  ifstream ifile( argv[argvCtr] );
+  if( !ifile ) {
+    errMsg << "ERROR: cannot open \"" << argv[argvCtr] << "\"... aborting\n";
+    return( 0 );
+  }
+  //
+  argvCtr++;
+  if ( argc < argvCtr+1  ) return(0);
+  float t_val = atof(argv[argvCtr]);
+  cout << "# t_val is " << t_val << endl;
+  //
+  argvCtr++;
+  if ( argc < argvCtr+1  ) return(0);  
+  int tilt_time = atoi( argv[argvCtr] );
+  vector< vector< vector< int > > > ttWindow;
+  if( tilt_time == 0 ) cout << "# Using linear time window.\n";
+  else if( tilt_time == 1 )cout << "# Using tilted time window\n";
+  else{
+    cout << "# " << tilt_time << " is not a valid value for tilt_time parameter\n";
+    return( 0 );
+  }
+  //
+  argvCtr++;
+  if ( argc < argvCtr+1  ) return(0);
+  int nvar = atoi(argv[argvCtr]);
+  cout << "# nvar is: " << nvar << endl;
+  ttWindow = vector< vector< vector< int > > >( nvar );
+  //
+  argvCtr++;
+  if ( argc < argvCtr+1  ) return(0);
+  int tgtIdx = atoi(argv[argvCtr]);
+  cout << "# Target index is: " << tgtIdx << endl;
+  if( tgtIdx > nvar-1 ){
+    errMsg << "ERROR: Invalid target index\n";
+    return( 0 );
+  }
+  //
+  vector<int> delay(nvar);
+  vector<int> nlags(nvar);
+  cout << "# ( delay , lag )\n";
+  for(int i=0; i< nvar; i++){
+    argvCtr++;
+    if ( argc < argvCtr+1  ) return(0);
+    delay[i] = atoi(argv[argvCtr]);
+    argvCtr++;
+    if ( argc < argvCtr+1  ) return(0);
+    nlags[i] = atoi(argv[argvCtr]);
+    if( i==tgtIdx && delay[i] <= 0){
+      delay[i]==1;
+    }
+    cout << "# ( " << delay[i] << "," << nlags[i] << " )" << endl;
+  }
+  int nAtt = 0;
+  if(tilt_time==0){
+    for( int i=0; i< nvar; i++){
+      nAtt += nlags[i];
+    }  
+  }
+  else{
+    string fname;
+    fname = prefix+"-ttWindow.dat";
+    ifstream ttFile( fname.c_str() );
+    if( !ttFile ){
+      errMsg << "ERROR: cannot open file " << fname << "\n\n";
+      return( 0 );
+    }
+    for( int i=0; i< ttWindow.size(); i++ ){
+      ttWindow[i] = vector< vector< int > >(2);
+      int nGran;
+      ttFile >> nGran;
+      for( int j=0; j<ttWindow[i].size(); j++ ){
+        ttWindow[i][j] = vector< int >( nGran );
+        for( int k=0; k<ttWindow[i][j].size(); k++ ){
+          ttFile >> ttWindow[i][j][k];
+          if( j==1 ) nAtt += ttWindow[i][j][k];
+        }
+      }
+    }
+    ttFile.close();
+  }
+  //
+  cout << "# Reading Data" << endl;
+  vector< ts_record > Records;
+  if( GetRecords( ifile, Records ) != 1 ){
+    errMsg << "ERROR: could not read records from " << argv[6] << "... aborting.\n";
+    return( 0 );
+  }
+  ifile.close();
+  cout << "# Read " << Records.size() << " records\n";
+  //
+  vector< vector< float > > normParam;
+  string npfile = prefix + "-norm_param.dat";
+  GetNormParam( npfile, normParam );
+  //
+  ml_predictor *model;
+  string pfile_name = mSpec;
+  
+  if( mType == 0 ) model = new naive_predictor( pfile_name );
+  else if( mType == 1 ) model = new adetnn( pfile_name );
+  int ErrCnt = 0;
+  int ExampCnt = 0;
+  int startIdx = 0;
+  if( mode == 2 || mode == 3 ) startIdx = Records.size()-1;
+  for( int i=startIdx; i < Records.size(); i++ ){
+    ts_record newEx;
+    int secDiff;
+    int success=0;
+    if( tilt_time==0 ){
+      success = MakeLinearTimeExample( Records, i, tgtIdx-1, delay, nlags, newEx);
+    }
+    else{
+      success = MakeTiltedTimeExample( Records, i, tgtIdx-1, delay, nlags, ttWindow, newEx);
+    }
+    if( success == 1 ){
+      //
+      if( norm == 1 ) NormalizeExample( newEx.Data(), normParam );
+      //
+      vector< float > result = model->TestHelper( newEx.Data(), t_val );
+      //
+      if( norm == 1 ) UnnormalizeResult( result, normParam );
+      //
+      if( result[4]==0 ) ErrCnt++;
+      ExampCnt++;
+      newEx.TS().PrintTimestamp(cout);
+      newEx.TS().PrintJulianDate(cout);
+      for( int k=0; k<result.size(); k++ ){
+        cout << setw(15) << result[k];
+      }
+      cout << endl;
+      if( mitigation && result[4]==0  ){
+        Records[i].Data()[tgtIdx-1] = result[2];
+      }
+    }
+    else{ //  couldn't evaluate point
+      Records[i].TS().PrintTimestamp( cout );
+      Records[i].TS().PrintJulianDate( cout );
+      cout << setw(15) << Records[i].Data()[tgtIdx-1];
+      for( int k=0; k<4; k++ ){
+        cout << setw(15) << -1;
+      }
+      cout << endl;
+    }
+  }
+  cout << "# Number of Examples: " << ExampCnt << endl;
+  cout << "# Number of Errors: " << ErrCnt << endl;
+  delete( model );
+  return( 1 );
+}
+

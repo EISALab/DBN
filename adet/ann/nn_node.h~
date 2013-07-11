@@ -1,0 +1,91 @@
+/******************************************************
+ *
+ * nn_node.h
+ *
+ * Header file for Neural Network Nodes
+ *
+ * 01.09.2006	djh	created
+ *
+ ******************************************************/
+#ifndef NN_NODE_H
+#define NN_NODE_H
+#include <iostream>
+#include <vector>
+
+#include "rng.h"
+using namespace std;
+
+/**********************************************************************
+ **********************************************************************
+ *  class nn_node
+ *  Neural Network node
+ **********************************************************************
+ **********************************************************************/
+ class nn_node{
+   public:
+     nn_node();
+     nn_node(const int n);
+     nn_node( const vector< double >& w, const double& b );
+     virtual ~nn_node();
+     virtual double activation( const vector< double >& in ) const=0;
+     virtual double WeightedSum( const vector< double >& in ) const;
+     virtual vector< double > BackpropDelta( const double& delta ) const;
+     virtual void DeltaW( vector< double >& DW, const vector< double >& in, const double& delta )const;
+     virtual void UpdateWeights( vector< double >&DW, const double& lr );
+  
+   protected:
+     vector< double > _w; // weight vector
+     double _bias; // bias
+ };
+
+
+/**********************************************************************
+ **********************************************************************
+ *  class nn_nodeLIN
+ *  Neural Network node with linear activation function
+ **********************************************************************
+ **********************************************************************/
+ class nn_nodeLIN : public nn_node {
+   public:
+     nn_nodeLIN();
+     nn_nodeLIN(const int n);
+     nn_nodeLIN( const vector< double >& w, const double& b );
+     virtual ~nn_nodeLIN();
+     virtual double activation( const vector< double >& in ) const;
+  
+   protected:
+
+ };
+
+/**********************************************************************
+ **********************************************************************
+ *  class nn_nodeSIG
+ *  Neural Network node with sigmoidal activation function
+ **********************************************************************
+ **********************************************************************/
+ class nn_nodeSIG : public nn_node {
+   public:
+     nn_nodeSIG();
+     nn_nodeSIG(const int n);
+     nn_nodeSIG( const vector< double >& w, const double& b );
+     virtual ~nn_nodeSIG();
+     virtual double activation( const vector< double >& in ) const;
+   
+   protected:
+ };
+
+
+/**********************************************************************
+ **********************************************************************
+ *
+ *  Other functions
+ *
+ **********************************************************************
+ **********************************************************************/
+ double rando();
+
+ double Sigmoid( const double& v );
+
+ double Sigmoid_Derivative( const double& v );
+
+#endif 

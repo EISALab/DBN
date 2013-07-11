@@ -1,0 +1,10 @@
+#make kalman filter library
+cd /home/djhill1/programs/KalmanFilter/src
+make
+
+#make rbpf library
+cd /home/djhill1/programs/RBPF/src
+make
+
+cd /home/djhill1/programs/adet/src
+make

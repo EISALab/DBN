@@ -1,0 +1,81 @@
+/******************************************************
+ *
+ * nnet_layer.h
+ *
+ * Header file for the nn_layer class
+ *
+ * 02.09.2006     DJH    created
+ *
+ ******************************************************/
+
+ #ifndef _NNET_LAYER_H
+ #define _NNET_LAYER_H
+
+ #include <cstdlib> 
+ #include <cmath>
+ #include <vector>
+ #include "nn_node.h"
+
+ using namespace std;
+/**********************************************************************
+ **********************************************************************
+ *
+ *  class nn_layer
+ *  Neural Network node with linear activation function
+ *
+ **********************************************************************
+ **********************************************************************/
+ class nn_layer {
+   public:
+     nn_layer(const int num_inputs, const int num_nodes);
+     nn_layer(const vector< nn_node* >& n, const int num_inputs );
+     virtual ~nn_layer();
+     virtual int NumNodes( )const;
+     virtual int NumInputs( )const;
+     virtual int NumOutputs( )const;
+     virtual vector< double > output( const vector< double >& input ) const;
+     virtual vector< double > BackpropDelta( const vector< double >& delta ) const;
+     virtual void DeltaW( vector< vector< double > >& DW, const vector< double >& in, const vector< double >& delta )const;
+     virtual void UpdateNodes( vector< vector< double > >& DW, const double& lr );
+  
+   protected:
+     vector< nn_node* > _nodes;
+     int _numIn;
+ };
+
+/**********************************************************************
+ **********************************************************************
+ *
+ *  class nn_layerLIN
+ *  Layer of linear neural network nodes
+ *
+ **********************************************************************
+ **********************************************************************/
+ class nn_layerLIN : public nn_layer {
+   public:
+     nn_layerLIN(const int num_inputs, const int num_nodes);  
+     nn_layerLIN(const vector< nn_node* >& n, const int num_inputs );
+     virtual ~nn_layerLIN();
+     
+   protected:
+ };
+
+/**********************************************************************
+ **********************************************************************
+ *
+ *  class nn_layerSIG
+ *  Layer of sigmoidal neural network nodes
+ *
+ **********************************************************************
+ **********************************************************************/
+ class nn_layerSIG : public nn_layer {
+   public:
+     nn_layerSIG(const int num_inputs, const int num_nodes);
+     nn_layerSIG(const vector< nn_node* >& n, const int num_inputs );
+     virtual ~nn_layerSIG();
+     
+     //virtual vector< double > output( const vector< double >& input ) const;
+   protected:
+ };
+
+ #endif

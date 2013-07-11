@@ -1,0 +1,352 @@
+#include "ml_predictoradet.h"
+
+/**********************************************************************************************************
+ *
+ * int ADET ( int argc, char** argv, ostream errMsg )
+ * 10.06.2006	djhill1	created
+ * 04.10.2006	djhill1 modified
+ *   command line args
+ *   variable time granularity
+ *   model learning functionality
+ *   performance counting functionality
+ *   
+ **********************************************************************************************************/
+ int ADET( int argc, char** argv, ostream& errMsg){
+  errMsg << "\n\nRun Anomaly Detection\n";
+  errMsg << "-p:  I/O file prefix\n";
+  errMsg << "-NN: use neural network\n";
+  errMsg << "-Naive: use naive predictor\n";
+  errMsg << "-AD: use anomaly detection anomaly handling strategy\n";
+  errMsg << "-ADAM: use anomaly detection and mitigation anomaly handling strategy\n";
+  errMsg << "-LastRecordOnly: only evaluate last record in input file\n";
+  errMsg << "-Normalize: normalize data\n";
+  errMsg << "-m [fname]: model specification file\n";
+  errMsg << "-f [fname]: data file\n";
+  errMsg << "-z [value]: Value for credible interval (80% = 1.645, 95% = 1.96, 99% = 2.576, 99.9% = 3.291)\n";
+  errMsg << "-u: [Number of data columns] [target column index] [delay column 0] [# lags column 0] ... [delay column n] [# lags column 1]\n";
+  errMsg << "-transform: [int]: Input transformation\n";
+  errMsg << "-r [int]: number of missing values before restarting filter\n";
+  errMsg << "-data_res [int]: data resolution in seconds (default 1)\n";
+  errMsg << "-data_res_int [int]: data resolution interval in seconds (default 0)\n";
+  errMsg << "-err: data file contains error classifications\n";
+  errMsg << "-L: learn model\n";
+  errMsg << "-eta [float]: momentum parameter for neural network learning\n";
+  errMsg << "-lr [float]: learning rate for neural network learning\n";
+  errMsg << "\n";
+  //
+  // initialize ADET parameters
+  string prefix = "A"; // file I/O prefix
+  int mType = 0; // model type (0) = naive predictor, (1) = neural network predictor
+  bool mitigation_on=false; // use mitigation error handling strategy true/false
+  bool LRO_on = false; // use last record only true/false
+  bool norm = false; // normalize variables true/false
+  bool learn_on = false; // Learn model;
+  string mSpec = "model.dat";
+  string ifile_name = "data.csv";
+  double z_val = 2.576;
+  int nvar = 1; // number of variables in input file
+  int tgtIdx = -1; // target Index
+  vector< int > delay(1,1);
+  vector< int > nlags(1,1);
+  int maxWindowLength = 0;
+  int transformation=-1;
+  int restartGapLength = -1;
+  int data_resolution = 1;
+  int data_resolution_range = 0;
+  bool errFlag = false;
+  double lr = 0.01;
+  double eta = 0.1;
+  //
+  // specify ADET parameters
+  stringstream inputLine;  
+  for( int i=2; i< argc; i++ ) inputLine << "  " << argv[i];
+  string flag;
+  while( inputLine >> flag ){
+    if( flag == "-p" ) inputLine >> prefix;
+    else if( flag == "-Naive") mType = 0;
+    else if( flag == "-NN") mType = 1;
+    else if( flag == "-AD" ) mitigation_on = false;
+    else if( flag == "-ADAM" ) mitigation_on = true;
+    else if( flag == "-LastRecordOnly" ) LRO_on = true;
+    else if( flag == "-Normalize" ) norm = true;
+    else if( flag == "-m" ) inputLine >> mSpec;
+    else if( flag == "-f" ) inputLine >> ifile_name;
+    else if( flag == "-z" ) inputLine >> z_val;
+    else if( flag == "-u" ){
+      inputLine >> nvar;
+      inputLine >> tgtIdx;
+      delay = vector<int>(nvar);
+      nlags = vector<int>(nvar);
+      for( int i=0; i<nvar; i++ ){
+        inputLine >> delay[i];
+        inputLine >> nlags[i];
+        maxWindowLength = ( (maxWindowLength>delay[i]+nlags[i]+1) ? maxWindowLength : delay[i]+nlags[i]+1 ); // plus 1 for safety
+      }
+    }
+    else if( flag == "-transform" ) inputLine >> transformation;
+    else if( flag == "-r" ) inputLine >> restartGapLength;
+    else if( flag == "-data_res" ) inputLine >> data_resolution;
+    else if( flag == "-data_res_int" ) inputLine >> data_resolution_range;
+    else if( flag == "-err" ) errFlag = true;
+    else if( flag == "-L" ) learn_on = true;
+    else if( flag == "-lr" ) inputLine >> lr;
+    else if( flag == "-eta" ) inputLine >> eta;
+    else{
+      errMsg << "Illegal flag: \"" << flag << "\"... aborting" << endl;
+      return( 0 );
+    }
+  }
+  //
+  // output ADET parameters
+  cout << "# I/O prefix: " << prefix << endl;
+  cout << "# model type: " << mType << endl;
+  cout << "# using mitigation: " << ( mitigation_on ? "yes" : "no" ) << endl;
+  cout << "# using last record only: " << ( LRO_on ? "yes" : "no" ) << endl;
+  cout << "# using normalized data: " << ( norm ? "yes" : "no" ) << endl;
+  cout << "# learn model: " << ( learn_on ? "yes" : "no" ) << endl;
+  cout << "# learning rate: " << lr << endl;
+  cout << "# learning momentum factor: " << eta << endl;
+  cout << "# model specification file: " << mSpec << endl;
+  cout << "# data file: " << ifile_name << endl;
+  cout << "# z value = " << z_val << endl;
+  cout << "# number of variables in data file: " << nvar << endl;
+  cout << "# Target index is: " << tgtIdx << endl;
+  cout << "# ( delay , lag )\n";
+  for(int i=0; i< nvar; i++){
+    cout << "# ( " << delay[i] << "," << nlags[i] << " )" << endl;
+  }
+  cout << "# using transformation: " << transformation << endl;
+  cout << "# restart gap length: " << restartGapLength << endl;
+  cout << "# data resolution: " << data_resolution << " (sec)\n";
+  cout << "# data resolution range: " << data_resolution_range << " (sec)\n";
+  cout << "# data file contains error classifications: " << ( (errFlag) ? "yes" : "no" ) << endl;
+  //
+  cout << "# Reading Data" << endl;
+  ifstream ifile( ifile_name.c_str() );
+  if( !ifile ) {
+    errMsg << "ERROR: cannot open \"" << ifile_name << "\"... aborting\n";
+    return( 0 );
+  }
+  vector< ts_record > Records;
+  if( GetRecords( ifile, Records ) != 1 ){
+    errMsg << "ERROR: could not read records from " << ifile_name << "... aborting.\n";
+    return( 0 );
+  }
+  ifile.close();
+  cout << "# Read " << Records.size() << " records\n";
+  //
+  vector< vector< float > > normParam;
+  string npfile = prefix + "-norm_param.dat";
+  if( !learn_on ) GetNormParam( npfile, normParam );
+  //
+  ml_predictor *model;
+  string pfile_name = mSpec;
+  if( mType == 0 && !learn_on){
+    model = new naive_predictor( pfile_name );
+  }
+  else if( mType == 1 && !learn_on ){
+    model = new adetnn( pfile_name );
+  }
+  // INITIALIZE PERFORMANCE COUNTS
+  int ErrCnt = 0;
+  int ExampCnt = 0;
+  int i = 0;
+  if( LRO_on ) i = Records.size()-1;
+  timestamp expectedTS = Records[i].TS();
+  int gapLength = 0;
+  vector< ts_record > trainingSet;
+  list< ts_record > modRecords; // holds window of recent records modified to correct anomalies or missing values
+  //for( int i=startIdx; i < Records.size(); i++ ){
+  while( i < Records.size() ){
+    // DEFINE NOT A NUMBER (NaN)
+    double NaN;
+    unsigned long nan[2]={0xffffffff, 0x7fffffff};
+    NaN = *( double* )nan;
+    // IF LONG STRETCH OF DATA IS MISSING, QUIT AND RESTART
+    if( restartGapLength > 0 && gapLength > restartGapLength ){
+      // RESET EXPECTED TIMESTAMP
+      expectedTS = Records[i].TS();
+      // RESET GAP DURATION
+      gapLength=0;
+      // RESET MODRECORDS
+      modRecords.clear();
+    }
+    // MAKE NEW OBSERVATION FROM RECORDS
+    ts_record newObs;
+    vector< double > labels;
+    // IF RECORD OCCURS BEFORE EXPECTED TIME, ABORT
+    if( Records[i].TS() < expectedTS ){
+      cerr << "Chronology error:";
+      Records[i].TS().PrintTimestamp(cerr);
+      Records[i].TS().PrintJulianDate(cerr);
+      cerr << endl;
+      exit( -1 );
+    }
+    //  IF RECORD OCCURS DURING EXPECTED TIME INTERVAL, PROCEED
+    if( expectedTS.NextIntervalSec( -data_resolution_range ) <= Records[i].TS() && 
+        Records[i].TS() <= expectedTS.NextIntervalSec( data_resolution_range ) ){
+      // TRANSFORM RECORD
+//      TransformInput( Records[i], transformation, errFlag );
+      // Get observation from records
+      vector< float > vals;
+      int ExampCntIdx = 0;
+      for( int j=0; j<nvar; j++ ){
+        if( Records[i].Data()[j] == Records[i].NAFlag() ){
+          vals.push_back( NaN );
+        }
+        else{
+          vals.push_back( Records[i].Data()[j] );
+        }
+      }
+      newObs = ts_record( expectedTS, vals, NaN );
+      //
+      if( errFlag ){
+        for( int j=nvar; j< 2*nvar; j++ ){
+          labels.push_back( Records[i].Data()[j] );
+        }
+      }
+      i++; // increment index
+      gapLength = 0;  //reset gap length
+    }
+    else{
+      // NEXT RECORD DOES NOT OCCUR AT EXPECTED TIME
+      // create new observation of all NaN
+      //cout << "# Making NaN record\n";
+      vector< float > vals(nvar, NaN);
+      if( errFlag ) labels = vector< double >( vals.size(), -2 );
+      newObs = ts_record( expectedTS, vals, NaN );
+      gapLength++;
+    }
+    modRecords.push_front( newObs );
+    if( modRecords.size() > maxWindowLength ) modRecords.pop_back();
+    // INCREMENT EXPECTED TIMESTAMP
+    expectedTS = expectedTS.NextIntervalSec( data_resolution );
+    //
+    bool success = false;
+    ts_record newEx;
+    if( modRecords.size() == maxWindowLength ){
+      success = true;
+      // COMPOSE NEXT EXAMPLE FROM MODRECORDS
+      vector< float > vals;
+      // PUSH BACK TARGET
+      vals.push_back( modRecords.front().Data()[tgtIdx-1] ); // -1 because column 0 of data file contained timestamp
+      // PUSH BACK ATTRIBUTES
+      for(int j=0; j< nvar; j++ ){
+        list<ts_record>::const_iterator iter;
+        list<ts_record>::const_iterator start;
+        list<ts_record>::const_iterator end;
+        for( int k=0; k< delay[j]; k++ ){
+          start++;
+          end++;
+        }
+        for( int k=0; k< delay[j]; k++ ){
+          end++;
+        }
+        for( iter=start; iter!=end; iter++ ){
+          vals.push_back( iter->Data()[j] );
+          if( isnan( vals.back() ) ) success = false;
+        }
+      }
+      newEx = ts_record( modRecords.front().TS(), vals, modRecords.front().NAFlag() );
+    }
+    if( success ){
+      if( learn_on ){
+        if( !isnan( newEx.Data().front() ) ) trainingSet.push_back( newEx );
+      }
+      else{
+        // result[4] = -2 can't evaluate
+        // result[4] = -1 filled NA
+        // result[4] = 0 anomaly
+        // result4] = 1 non-anomaly
+        if( norm ) NormalizeExample( newEx.Data(), normParam );
+        vector< float > result = model->TestHelper( newEx.Data(), z_val );
+        if( result[0] == newEx.NAFlag() ) result[4] == -1;
+        if( norm ) UnnormalizeResult( result, normParam );
+        //
+        if( result[4]==0 ) ErrCnt++;
+        ExampCnt++;
+        newEx.TS().PrintTimestamp(cout);
+        newEx.TS().PrintJulianDate(cout);
+        for( int k=0; k<result.size(); k++ ){
+          cout << setw(15) << result[k];
+        }
+        cout << endl;
+        if( (mitigation_on && result[4]==0) || isnan(modRecords.front().Data().front())  ){
+          modRecords.front().Data()[0] = result[2];
+        }
+      }
+    }
+    //
+    else{
+      // CANNOT EVALUATE POINT
+      newEx.TS().PrintTimestamp( cout );
+      newEx.TS().PrintJulianDate( cout );
+      cout << setw(15) << newEx.Data().front();
+      for( int k=0; k<4; k++ ){
+        cout << setw(15) << -2;
+      }
+      cout << endl;      
+    }
+  }
+  // FINISH UP
+  if( learn_on ){
+    // NORMALIZE TRAINING DATA
+    GetNormParam( npfile, normParam );
+    vector< vector< float > > TrainExamples(trainingSet.size() );
+    for( int i=0; i< TrainExamples.size(); i++ ){
+      TrainExamples[i] = trainingSet[i].Data();
+    }
+    NormalizeExamples( 0, TrainExamples, normParam ); // 0 FLAG INDICATES NORMPARAM IS UNKNOWN
+    // WRITE NORMALIZATION PARAMETER FILE
+    npfile = prefix + "-norm_param.dat";
+    ofstream ofile( npfile.c_str() );
+    ofile << normParam[0].size() << endl;
+    for( int i=0; i < 2; i++ ){
+      for( int j=0; j< normParam[i].size(); j++ ){
+        ofile << setw(15) << normParam[i][j];
+      }
+      ofile << endl;
+    }
+    ofile.close();
+    //
+    // FOR NEURAL NETWORKS
+    if( mType = 1 ){
+      int num_inputs;
+      int num_HL;
+      int num_outputs;
+      double stopErr;
+      int stopIter;
+      ifstream msfile( pfile_name.c_str() );
+      if( !msfile ) {
+        errMsg << "ERROR: cannot open \"" << pfile_name << "\"... aborting\n";
+        return( 0 );
+      }
+      msfile >> num_inputs >> num_HL;
+      vector< int > HL_arch( num_HL );
+      for(int i=0; i< num_HL; i++ ){
+        msfile >> HL_arch[i];
+      }
+      msfile >> num_outputs >> stopErr >> stopIter;
+      model = new adetnn(num_inputs, HL_arch, num_outputs, stopErr, stopIter);
+      // PERFORM 10-FOLD CROSS VALIDATION
+      model->k_FoldXV( 10, TrainExamples, lr, eta, 1.01, 0.5 );
+    }
+    //
+    ofstream model_ofile( mSpec.c_str() );
+    if( !model_ofile ){
+      errMsg << "Error: could not open file " << mSpec << endl;
+      return(0);
+    }
+    model->Print( model_ofile );
+    model_ofile.close();
+    //
+    return( 1 );
+  }
+  else{
+    cout << "# Number of Examples: " << ExampCnt << endl;
+    cout << "# Number of Errors: " << ErrCnt << endl;
+  }
+  delete( model );
+  return( 1 );
+}
+

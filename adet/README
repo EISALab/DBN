@@ -1,0 +1,38 @@
+This program performs anomaly detection on data held in a flat file.
+
+ 
+Usage: bin/adet <task> <prefix> [params]
+<task>: operation to be performed on data.
+       -3 - depreciated perceptron prediction
+        0 - create time-series datafiles
+        1 - correlation analysis
+        2 - naive prediction
+        3 - perceptron prediction
+        4 - neural network prediction
+        5 - clustering prediction
+        6 - create test data with errors.
+        7 - tabulate results.
+        8 - split datafile into test/train set and demonstration set.
+        9 - create train & test data for Yan's NN.
+       10 - Extract time-series window around specified times.
+       11 - Use bold driver NN.
+       12 - Extract new data files corresponding to different time ranges
+       13 - Extract data sample
+       14 - Make error data
+       15 - Convert comma seperated data into space seperated data
+       16 - Multiple Granularity Correlation Analysis
+       17 - Tilted Time Window Correlation Analysis
+       18 - manual error identification
+       19 - validation sample
+       20 - countValidationSample
+       21 - Make Histogram of data
+       22 - Calculate Residuals from Validation Sample
+       23 - Perform ADET
+       24 - Perform Bayesian ADET
+       25 - Merge data files
+       26 - Inject Error into Data Files
+       27 - Calculate Embedding Dimension
+       28 - Test data for time stationarity
+[params]: algorithm specific parameters
+
+run adet <task> for list of algorithm specific parameters

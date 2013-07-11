@@ -1,0 +1,238 @@
+/******************************************************
+ *
+ * nn.cc
+ *
+ * Header file for Neural Network class
+ *
+ * 01.10.2006	djh	created
+ *
+ ******************************************************/
+ #include "nn.h"
+
+/**********************************************************************
+ **********************************************************************
+ *  class nn
+ *  Generic Neural Network
+ **********************************************************************
+ **********************************************************************/
+ nn::nn(){
+   _layers=vector< nn_layer* >(0);
+ }
+ 
+ nn::nn( const vector<nn_layer* > l ){
+   _layers = l;
+ }
+ 
+/**********************************************************************
+ * nn::nn( const int&, const vector< int >&, const int& )
+ * Inputs:
+ *   size of input layer
+ *   vector H0 - size of first hidden layer
+ *          H1 - size of second hidden layer
+ *          etc.
+ *   size of ouput layer
+ **********************************************************************/ 
+ nn::nn( const int& numI, const vector< int >& Hparams, const int& numO ){
+   _layers=vector< nn_layer* >(Hparams.size()+1); // +1 for output layer
+ }
+ 
+ nn::~nn(){
+   for( int i=0; i< _layers.size(); i++ ){
+     delete( _layers[i] );
+   }
+ }
+ 
+ vector< double > nn::prop( const vector< double >& in ) const{
+   vector< vector< double > > outs;
+   prop( in, outs );
+   return( outs.back() );
+ }
+ 
+ void nn::prop( const vector< double >& in, vector< vector< double > >& allOuts ) const{
+   cout << "input pattern to network: ";
+   for( int j=0; j<in.size(); j++ ){
+     cout << setw(15) << in[j];
+   }
+   cout << endl;
+   cout << "number of hidden layers in network: " << _layers.size()-1 << endl;
+
+   if( _layers.size() == 0 ){
+     cerr << "WARNING: NN has no hidden or output layers\n";
+     return;
+   }
+   if( in.size() != _layers[0]->NumInputs() ){
+     cerr << "ERROR: vector< double > nn::prop( const vector< double >& ) const\n";
+     cerr << " expecting " << _layers[0] ->NumInputs() << " inputs found " << in.size() << endl; 
+     exit( -1 );
+   }
+   //
+   allOuts = vector< vector< double > >( _layers.size() );
+   vector< double > layer_iput = in;
+   for( int i=0; i<_layers.size(); i++ ){
+     cout <<"input pattern to layer " << i << ": ";
+     for( int j=0; j<layer_iput.size(); j++ ){
+       cout << setw(15) << layer_iput[j];
+     }
+     cout << endl;
+     allOuts[i] = _layers[i]->output( layer_iput );
+     cout << "layer " << i << " output:           ";
+     for( int j=0; j<allOuts[i].size(); j++ ){
+       cout << setw(15) << allOuts[i][j];
+     }
+     cout << endl;
+     layer_iput = allOuts[i];
+   }
+ }
+ 
+
+/**********************************************************************
+ **********************************************************************
+ *  class bpnn
+ *  Backpropagation Neural Network
+ **********************************************************************
+ **********************************************************************/
+ bpnn::bpnn(): nn(){ }
+ 
+ bpnn::bpnn( const int& numIn, const vector< int >& Hparams, const int& numOut ): nn( numIn, Hparams, numOut ){
+   int inputSize = numIn;
+   for( int i=0; i<Hparams.size(); i++ ){
+     _layers[i] = new nn_layerSIG( inputSize, Hparams[i] );
+     inputSize = _layers[i]->NumOutputs();
+   }
+   _layers.back() = new nn_layerLIN( inputSize, numOut ); 
+ }
+ 
+ bpnn::bpnn( const vector<nn_layer* > l ): nn(l) {
+   _layers = l;
+ }
+ 
+ bpnn::~bpnn(){ }
+
+/**********************************************************************
+ * void bpnn::backprop( const vector< double >& pat, const vector< double >& tgt, vector< vector< double > >& outs )
+ * param:
+ *   pat - pattern vector
+ *   tgt - target vector
+ *   outs - vector of all outputs from hidden and output layers
+ *
+ **********************************************************************/
+ void bpnn::backprop( const vector< double >& pat, const vector< double >& tgt, vector< vector< double > >& outs, vector< vector< vector< double > > >& DW ){
+   vector< vector< double > > delta( _layers.size() );
+   cout << "delta size: " << delta.size() << endl;
+   //vector< vector< double > > dw( _layers.size() );
+   vector< double > tmp_vd;
+   
+   // output layer
+   cout << "Output layer\n";
+   tmp_vd = vector< double >( tgt.size() );
+   for( int i=0; i< tgt.size(); i++ ){
+     tmp_vd[i] = outs.back()[i]-tgt[i];
+   }
+   delta.back() = tmp_vd;
+   
+   // hidden layers
+   cout << "Hidden layers" << endl;
+   for( int i=delta.size()-2; i>= 0; i-- ){
+     tmp_vd = vector< double >( outs[i].size() );
+     vector< double > sum_wd = _layers[i+1]->BackpropDelta( delta[i+1] );
+     for( int j=0; j<tmp_vd.size(); j++ ){
+       cout << "Hidden node " << j << endl;
+       cout << " output: " << outs[i][j] << " sum(w delta): " << sum_wd[j] << endl;
+       tmp_vd[j] = outs[i][j]*(1.-outs[i][j])*sum_wd[j];
+     }
+     delta[i]=tmp_vd;
+   }
+   
+   cout << "Deltas:\n";
+   for( int i=0; i< delta.size(); i++ ){
+     cout << "Layer: " << i << endl;
+     for( int j=0; j<delta[i].size(); j++ ){
+       cout << "Node: " << j << " delta " << delta[i][j] << endl;
+     }
+     cout << endl;
+   }
+   
+   //Weight updates;
+   /*vector< vector< vector< double > > > weightUpdate( _layers.size() );
+   for( int i=0; i < _layers.size(); i++ ){
+     weightUpdate[i] = vector< vector< double > >( _layers[i]->NumNodes() );
+     for( int j=0; j< _layers[i]->NumNodes(); j++ ){
+       weightUpdate[i][j] = vector< double >(_layers[i]->NumInputs()+1, 0.);
+     }
+   }*/
+   for( int i=0; i< _layers.size(); i++ )
+   {
+     if( i==0 ) _layers[i]->DeltaW( DW[i], pat, delta[i] );
+     else _layers[i]->DeltaW( DW[i], outs[i-1], delta[i] );
+   }
+   /*for( int i=0; i < weightUpdate.size(); i++ ){
+     cout << "Layer: " << i << endl;
+     for( int j=0; j< weightUpdate[i].size(); j++ ){
+       cout << "Node: " << j << endl;
+       for( int k=0; k< weightUpdate[i][j].size(); k++ ){
+         cout << "Weight " << k << " update " << weightUpdate[i][j][k] << endl;
+       }
+       cout << endl;
+     }
+     cout << endl << endl;
+   }*/
+
+ }
+ 
+ /**********************************************************************
+ * void bpnn::TrainBatch( const vector< vector< double > >& pat, const vector< vector< double > >& tgt ){
+ * param:
+ *   pat - vector of pattern vectors
+ *   tgt - vector of target vectors
+ *
+ **********************************************************************/
+ void bpnn::TrainBatch( const vector< vector< double > >& pat, const vector< vector< double > >& tgt, double& lrate ){
+   //
+   vector< vector< double > > outs;
+   //
+   vector< vector< vector< double > > > weightUpdate( _layers.size() );
+   for( int i=0; i < _layers.size(); i++ ){
+     weightUpdate[i] = vector< vector< double > >( _layers[i]->NumNodes() );
+     for( int j=0; j< _layers[i]->NumNodes(); j++ ){
+       weightUpdate[i][j] = vector< double >(_layers[i]->NumInputs()+1, 0.);
+     }
+   }
+   
+   //while( err < 0.1 ){
+   for( int i=0; i< 100; i++ ){
+     for( int i=0; i < weightUpdate.size(); i++ ){
+       for( int j=0; j< weightUpdate[i].size(); j++ ){
+         for( int k=0; k< weightUpdate[i][j].size(); k++ ){
+           //cout << "Weight " << k << " update " << weightUpdate[i][j][k] << endl;
+           weightUpdate[i][j][k] = 0.0;
+         }
+       }
+     }
+     for( int i=0; i < pat.size(); i++ ){
+       prop( pat[i], outs );
+       backprop( pat[i], tgt[i], outs, weightUpdate  );
+     
+       cout << "Pattern " << i << endl;
+       cout << "Predict vs. Target" << endl;
+       for( int j=0; j<tgt.size(); j++ ){
+         cout << outs.back()[j] << setw(5) << tgt[i][j] << endl;
+         //err += pow( (outs.back()[j]-tgt[i][j]), 2 );
+       }
+     }
+     for( int i=0; i < _layers.size(); i++ ){
+       _layers[i]->UpdateNodes( weightUpdate[i], lrate );
+     }
+   }
+   
+   //for( int i=0; i < weightUpdate.size(); i++ ){
+   //  cout << "Layer: " << i << endl;
+   //  for( int j=0; j< weightUpdate[i].size(); j++ ){
+   //    cout << "Node: " << j << endl;
+   //    for( int k=0; k< weightUpdate[i][j].size(); k++ ){
+   //      cout << "Weight " << k << " update " << weightUpdate[i][j][k] << endl;
+   //    }
+   //    cout << endl;
+   //  }
+   //  cout << endl << endl;
+   //}
+ }

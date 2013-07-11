@@ -1,0 +1,60 @@
+/******************************************************
+ *
+ * nn.h
+ *
+ * Header file for Neural Network class
+ *
+ * 01.10.2006	djh	created
+ *
+ ******************************************************/
+#ifndef NN_H
+#define NN_H
+#include <iostream>
+#include <iomanip>
+#include <vector>
+
+#include "nn_layer.h"
+#include "rng.h"
+using namespace std;
+
+/**********************************************************************
+ **********************************************************************
+ *  class nn
+ *  Generic Neural Network
+ **********************************************************************
+ **********************************************************************/
+ class nn{
+   public:
+     nn();
+     nn( const int& numI, const vector< int >& Hparams, const int& numOut );
+     nn( const vector<nn_layer* > l );
+     virtual ~nn();
+     virtual vector< double > prop( const vector< double >& in ) const;
+     virtual void prop( const vector< double >& in, vector< vector< double > >& allOuts ) const;
+  
+   protected:
+     vector< nn_layer* > _layers; // layers
+ };
+
+
+/**********************************************************************
+ **********************************************************************
+ *  class bpnn
+ *  Backpropagation Neural Network
+ **********************************************************************
+ **********************************************************************/
+ class bpnn: public nn{
+   public:
+     bpnn();
+     bpnn( const vector<nn_layer* > l );
+     bpnn( const int& numI, const vector< int >& Hparams, const int& numOut );
+     virtual ~bpnn();
+     
+     virtual void backprop( const vector< double >& pat, const vector< double >& tgt, vector< vector< double > >& allOuts, vector< vector< vector< double > > >& DW );
+     
+     virtual void TrainBatch( const vector< vector< double > >& pat, const vector< vector< double > >& tgt, double& lrate );
+  
+   protected:
+ };
+
+#endif 

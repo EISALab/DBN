@@ -1,0 +1,26 @@
+# mode is: 0
+# differencing level is: 0
+# inputfile is: 0
+# nvar is: 3
+# Target index is: 0
+# ( delay , lag )
+# ( 1,101 )
+# ( 0,100 )
+# ( 0,100 )
+# lrate: 1e-05
+# Reading Data
+# Determine number of attributes
+# Number of attributes is: 301
+# Determine maximum memory
+# Maximum memory is: 102
+# Tabulate chronologically ordered data table
+# Cannot use examples within nlags of data end
+# Compile time-series data
+# Clean time-series data by getting rid of records containing N/A records
+# Total number of examples: 5262
+# Number of training examples: 3507
+# Number of testing examples: 1755
+# Training period: ( 09/24/1993+0900 , 08/24/2001+1300 )
+# Testing period: ( 08/24/2001+1400 , 08/21/2005+1100 )
+# Calculating Correlations
+Assert: Error!

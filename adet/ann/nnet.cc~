@@ -1,0 +1,39 @@
+#include <iostream>
+#include <cstdlib> 
+#include <ctime>
+#include <cmath>
+//#include <fcntl.h>
+
+#define rando() 
+double rando();
+double Sigmoid( const double& v );
+double Sigmoid_Derivative( const double& v );
+main() {
+  int NUMPAT = 4; // number of input patterns
+  int NUMIN = 2;  //number of input units
+  int NUMHID = 2; // number of hidden units 
+  int NUMOUT = 1; // number of output units
+  
+  vector< vector< double > > Weight(
+  vector< double > Layer2In()
+  Layer2In[j] = Weight[0][j] ;
+  for( i = 1 ; i <= NumUnits1 ; i++ ) {
+    Layer2In[j] += Layer1Out[i] * Weight[i][j] ;
+  }
+  Layer2Out[j] = 1.0/(1.0 + exp(-Layer2In[j])) ;
+  
+}
+ = Sigmoid * (1.0 - Sigmoid) ;
+ 
+double rando(){
+  return((double)rand()/RAND_MAX);
+}
+
+double sigmoid( const double& v ){
+ return( 1.0/(1.0 + exp(-v)) );
+}
+
+double Sigmoid_Derivative( const double& v ){
+  return( 1.0-Sigmoid(v) );
+}
+
